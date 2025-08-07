@@ -1,0 +1,199 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Delay Activity</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: url("{% static 'images/background.jpg' %}") no-repeat center center fixed;
+            background-size: cover;
+        }
+
+        .delay-container {
+            max-width: 700px;
+            margin: 60px auto;
+            padding: 40px;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        h2, h3, h4 {
+            text-align: center;
+            color: #333;
+        }
+
+        p {
+            text-align: center;
+            font-size: 16px;
+            margin: 5px 0;
+        }
+
+        #clock {
+            font-weight: bold;
+            color: #007BFF;
+        }
+
+        .delay-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .delay-buttons form {
+            display: inline;
+        }
+
+        .delay-buttons button {
+            padding: 10px 20px;
+            font-size: 14px;
+            background-color: #ffc107;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .delay-buttons button:hover {
+            background-color: #e0a800;
+        }
+
+        .finish-delay {
+            display: block;
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .finish-delay button {
+            padding: 10px 25px;
+            font-size: 15px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        .finish-delay button:hover {
+            background-color: #218838;
+        }
+
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .back-link a {
+            text-decoration: none;
+            color: #007BFF;
+            font-weight: bold;
+        }
+
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="delay-container">
+        <h2>Selamat datang, {{ driver.driver_name }}</h2>
+        <p><strong>Unit Hauler:</strong> {{ driver.hauler_code.hauler_code }}</p>
+        <p><strong>Aktivitas Saat Ini:</strong> {{ current_activity }}</p>
+        <p><strong>Waktu:</strong> <span id="clock"></span></p>
+
+        <h3>Pilih Delay</h3>
+        <div class="delay-buttons">
+            {% for delay in delay_list %}
+                {% if delay %}
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="activity" value="{{ delay }}">
+                    <button type="submit">{{ delay }}</button>
+                </form>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        <div class="finish-delay">
+            <form method="post">
+                {% csrf_token %}
+                <button type="submit" name="activity" value="Finish Delay">Finish Delay</button>
+            </form>
+        </div>
+
+        <div class="back-link">
+            <a href="{% url 'main_menu' %}">← Kembali ke Menu Utama</a>
+        </div>
+    </div>
+
+    <script>
+        function updateClock() {
+            const now = new Date();
+            document.getElementById("clock").innerText = now.toLocaleTimeString('id-ID', { hour12: false });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Tangkap semua tombol delay dan finish
+        document.querySelectorAll('.delay-buttons form, .finish-delay form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+
+                const formData = new FormData(form);
+                const activity = formData.get('activity');
+                const data = {
+                    activity: activity,
+                    timestamp: new Date().toISOString()
+                };
+
+                if (navigator.onLine) {
+                    fetch('/submit-delay/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': '{{ csrf_token }}'
+                        },
+                        body: JSON.stringify(data)
+                    }).then(res => res.json())
+                      .then(res => {
+                          alert("Delay terkirim: " + res.status);
+                          window.location.href = "{% url 'main_menu' %}";
+                      });
+                } else {
+                    let offlineData = JSON.parse(localStorage.getItem('offline_delay_data')) || [];
+                    offlineData.push(data);
+                    localStorage.setItem('offline_delay_data', JSON.stringify(offlineData));
+                    alert("Offline: Delay disimpan dan akan dikirim saat online.");
+                }
+            });
+        });
+
+        // Saat online, kirim semua delay tersimpan
+        window.addEventListener('online', () => {
+            const offlineData = JSON.parse(localStorage.getItem('offline_delay_data')) || [];
+            offlineData.forEach(data => {
+                fetch('/submit-delay/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify(data)
+                });
+            });
+            if (offlineData.length > 0) {
+                alert("Terkoneksi: Mengirim delay yang tersimpan...");
+            }
+            localStorage.removeItem('offline_delay_data');
+        });
+    </script>
+</body>
+</html>

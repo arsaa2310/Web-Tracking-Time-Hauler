@@ -1,0 +1,141 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Menu Utama Driver</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: url("{% static 'images/background.jpg' %}") no-repeat center center fixed;
+            background-size: cover;
+        }
+
+        .main-container {
+            max-width: 600px;
+            margin: 60px auto;
+            padding: 40px;
+            background-color: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        p {
+            font-size: 16px;
+            color: #444;
+            margin: 8px 0;
+        }
+
+        #clock {
+            font-weight: bold;
+            color: #007BFF;
+        }
+
+        form button {
+            padding: 12px 24px;
+            font-size: 16px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            margin-top: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        form button:hover {
+            background-color: #218838;
+        }
+
+        .link-group {
+            margin-top: 25px;
+        }
+
+        .link-group a {
+            text-decoration: none;
+            color: #007BFF;
+            margin: 0 10px;
+            font-weight: bold;
+        }
+
+        .link-group a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <h2>Selamat datang, {{ driver.driver_name }}</h2>
+        <p><strong>Unit Hauler:</strong> {{ driver.hauler_code.hauler_code }}</p>
+        <p><strong>Aktivitas Saat Ini:</strong> {{ current_activity }}</p>
+        <p><strong>Shift:</strong> {{ shift }}</p>
+        <p><strong>Waktu:</strong> <span id="clock"></span></p>
+        <p><strong>Location:</strong> {{ location }}</p>
+        
+
+
+        <form method="post" action="{% url 'next_activity' %}">
+            {% csrf_token %}
+            <button type="submit">{{ activity_button_label }}</button>
+        </form>
+
+        <div class="link-group">
+            <a href="{% url 'delay_site' %}" id="delay-link">Delay</a> |
+            <a href="{% url 'logout_driver' %}">Logout</a>
+        </div>
+    </div>
+
+    <script>
+        function updateClock() {
+            const now = new Date();
+            document.getElementById("clock").innerText = now.toLocaleTimeString('id-ID', { hour12: false });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Tangkap klik link Delay saat offline
+        const delayLink = document.getElementById("delay-link");
+        delayLink.addEventListener('click', function(e) {
+            if (!navigator.onLine) {
+                e.preventDefault(); // Cegah pindah halaman
+                const data = {
+                    activity: 'delay_clicked',
+                    timestamp: new Date().toISOString()
+                };
+                let offlineData = JSON.parse(localStorage.getItem('offline_delay_data')) || [];
+                offlineData.push(data);
+                localStorage.setItem('offline_delay_data', JSON.stringify(offlineData));
+                alert("Offline: Klik Delay disimpan.");
+            }
+        });
+
+        // Kirim ulang delay saat kembali online
+        window.addEventListener('online', () => {
+            const offlineData = JSON.parse(localStorage.getItem('offline_delay_data')) || [];
+            offlineData.forEach(data => {
+                fetch('/submit-delay/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify(data)
+                });
+            });
+            if (offlineData.length > 0) {
+                alert("Terkoneksi: Delay yang tersimpan dikirim...");
+            }
+            localStorage.removeItem('offline_delay_data');
+        });
+    </script>
+</body>
+</html>
